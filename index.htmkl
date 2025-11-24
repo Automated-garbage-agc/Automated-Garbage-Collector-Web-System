@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AGC - Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #fff;
+      padding: 24px 28px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 320px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 8px;
+      color: #1d3557;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 18px;
+    }
+    label {
+      font-size: 13px;
+      font-weight: bold;
+      color: #555;
+    }
+    input {
+      width: 100%;
+      padding: 8px 10px;
+      margin: 6px 0 14px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    input:focus {
+      border-color: #457b9d;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(69,123,157,0.2);
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      background: #1d3557;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #16314a;
+    }
+    .error {
+      color: #e63946;
+      font-size: 13px;
+      margin-top: 8px;
+      text-align: center;
+      min-height: 18px;
+    }
+    .hint {
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>AGC Login</h2>
+    <div class="subtitle">Automated Garbage Collector</div>
+
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required>
+
+      <button type="submit">Login</button>
+      <div class="error" id="error-msg"></div>
+      <div class="hint">Demo: admin/admin123 or user1/user123</div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("login-form");
+    const errorMsg = document.getElementById("error-msg");
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      errorMsg.textContent = "";
+
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      try {
+        const res = await fetch("http://127.0.0.1:5000/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          errorMsg.textContent = data.message || "Login failed";
+          return;
+        }
+
+        // Save logged in user info
+        localStorage.setItem("agc_user", JSON.stringify(data.user));
+
+        // Redirect based on role
+        if (data.user.role === "resident") {
+          window.location.href = "resident.html";
+        } else if (data.user.role === "admin") {
+          window.location.href = "admin.html";
+        } else {
+          errorMsg.textContent = "Unknown role";
+        }
+
+      } catch (err) {
+        console.error(err);
+        errorMsg.textContent = "Error connecting to server";
+      }
+    });
+  </script>
+</body>
+</html>
