@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AGC - Resident Portal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f8;
+      margin: 0;
+    }
+    .topbar {
+      background: #1d3557;
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .topbar-title {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .topbar-sub {
+      font-size: 12px;
+      color: #d9e2ec;
+    }
+    .logout-btn {
+      padding: 6px 10px;
+      font-size: 13px;
+      background: #e63946;
+      border: none;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #1d3557;
+    }
+    #user-info {
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 10px;
+    }
+    .btn-primary {
+      padding: 8px 14px;
+      background: #2a9d8f;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .btn-primary:hover {
+      background: #21867a;
+    }
+    #status-msg {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #333;
+      min-height: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #1d3557;
+      color: white;
+    }
+    tr:nth-child(even) {
+      background: #f8f9fa;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+    }
+    .badge-pending { background: #f4a261; }
+    .badge-progress { background: #457b9d; }
+    .badge-completed { background: #2a9d8f; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">AGC - Resident Portal</div>
+      <div class="topbar-sub">Automated Garbage Collector</div>
+    </div>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="section-title">Welcome</div>
+      <div id="user-info">Loading user info...</div>
+      <button class="btn-primary" id="requestPickupBtn">Request Garbage Pickup</button>
+      <div id="status-msg"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">My Pickup Requests</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Requested At</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="requests-body">
+          <tr><td colspan="3">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const userJson = localStorage.getItem("agc_user");
+    if (!userJson) {
+      window.location.href = "login.html";
+    }
+
+    const user = JSON.parse(userJson);
+
+    if (user.role !== "resident") {
+      // Only residents allowed here
+      window.location.href = "login.html";
+    }
+
+    document.getElementById("user-info").textContent =
+      `Name: ${user.name} | House: ${user.house_number}`;
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      localStorage.removeItem("agc_user");
+      window.location.href = "login.html";
+    });
+
+    const statusMsg = document.getElementById("status-msg");
+    const requestsBody = document.getElementById("requests-body");
+
+    async function loadMyRequests() {
+      try {
+        const res = await fetch(`http://127.0.0.1:5000/api/my-requests?user_id=${user.user_id}`);
+        const data = await res.json();
+        if (!data.success) {
+          requestsBody.innerHTML = `<tr><td colspan="3">Could not load requests.</td></tr>`;
+          return;
+        }
+
+        if (data.requests.length === 0) {
+          requestsBody.innerHTML = `<tr><td colspan="3">No requests yet.</td></tr>`;
+          return;
+        }
+
+        requestsBody.innerHTML = "";
+        data.requests.forEach(req => {
+          const tr = document.createElement("tr");
+
+          let badgeClass = "badge-pending";
+          if (req.status === "IN-PROGRESS") badgeClass = "badge-progress";
+          if (req.status === "COMPLETED") badgeClass = "badge-completed";
+
+          tr.innerHTML = `
+            <td>${req.request_id}</td>
+            <td>${req.timestamp}</td>
+            <td><span class="badge ${badgeClass}">${req.status}</span></td>
+          `;
+          requestsBody.appendChild(tr);
+        });
+
+      } catch (err) {
+        console.error(err);
+        requestsBody.innerHTML = `<tr><td colspan="3">Error loading data.</td></tr>`;
+      }
+    }
+
+    document.getElementById("requestPickupBtn").addEventListener("click", async () => {
+      statusMsg.textContent = "Sending pickup request...";
+      try {
+        const res = await fetch("http://127.0.0.1:5000/api/request-pickup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ user_id: user.user_id })
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          statusMsg.textContent = data.message || "Failed to create request.";
+          return;
+        }
+
+        statusMsg.textContent = "Pickup request created successfully!";
+        loadMyRequests();
+
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = "Error sending request.";
+      }
+    });
+
+    // Initial load
+    loadMyRequests();
+  </script>
+</body>
+</html>

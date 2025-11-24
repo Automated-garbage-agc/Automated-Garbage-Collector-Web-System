@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AGC - Admin Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f8;
+      margin: 0;
+    }
+    .topbar {
+      background: #1d3557;
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .topbar-title {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .topbar-sub {
+      font-size: 12px;
+      color: #d9e2ec;
+    }
+    .logout-btn {
+      padding: 6px 10px;
+      font-size: 13px;
+      background: #e63946;
+      border: none;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 20px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #1d3557;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #1d3557;
+      color: white;
+    }
+    tr:nth-child(even) {
+      background: #f8f9fa;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+    }
+    .badge-pending { background: #f4a261; }
+    .badge-progress { background: #457b9d; }
+    .badge-completed { background: #2a9d8f; }
+    #refresh-info {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">AGC - Admin Dashboard</div>
+      <div class="topbar-sub">Monitor all pickup requests and waste logs</div>
+    </div>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="section-title">All Pickup Requests</div>
+      <div id="refresh-info">Auto-refreshing every 7 seconds…</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Resident</th>
+            <th>House</th>
+            <th>Requested At</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="requests-body">
+          <tr><td colspan="5">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Waste Collection Logs (Demo)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Waste Type</th>
+            <th>Resident</th>
+            <th>House</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="logs-body">
+          <tr><td colspan="5">No logs yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const userJson = localStorage.getItem("agc_user");
+    if (!userJson) {
+      window.location.href = "login.html";
+    }
+
+    const user = JSON.parse(userJson);
+
+    if (user.role !== "admin") {
+      // only admin allowed here
+      window.location.href = "login.html";
+    }
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      localStorage.removeItem("agc_user");
+      window.location.href = "login.html";
+    });
+
+    const requestsBody = document.getElementById("requests-body");
+    const logsBody = document.getElementById("logs-body");
+
+    function getBadgeClass(status) {
+      if (status === "IN-PROGRESS") return "badge badge-progress";
+      if (status === "COMPLETED") return "badge badge-completed";
+      return "badge badge-pending";
+    }
+
+    async function loadAllRequests() {
+      try {
+        const res = await fetch("http://127.0.0.1:5000/api/all-requests");
+        const data = await res.json();
+
+        if (!data.success) {
+          requestsBody.innerHTML = `<tr><td colspan="5">Could not load requests.</td></tr>`;
+          return;
+        }
+
+        if (data.requests.length === 0) {
+          requestsBody.innerHTML = `<tr><td colspan="5">No pickup requests yet.</td></tr>`;
+          return;
+        }
+
+        requestsBody.innerHTML = "";
+        data.requests.forEach(req => {
+          const tr = document.createElement("tr");
+          const badgeClass = getBadgeClass(req.status);
+
+        tr.innerHTML = `
+        <td>${req.request_id}</td>
+        <td>${req.resident_name}</td>
+        <td>${req.house_number}</td>
+        <td>${req.timestamp}</td>
+        <td>
+            <span class="${badgeClass}">${req.status}</span>
+            ${
+            req.status === "PENDING"
+            ? `<button onclick="updateStatus(${req.request_id}, 'IN-PROGRESS')" style="margin-left:6px;">Approve</button>`
+            : req.status === "IN-PROGRESS"
+            ? `<button onclick="updateStatus(${req.request_id}, 'COMPLETED')" style="margin-left:6px;">Complete</button>`
+            : ``
+            }
+        </td>
+        `;
+        requestsBody.appendChild(tr);
+
+        });
+      } catch (err) {
+        console.error(err);
+        requestsBody.innerHTML = `<tr><td colspan="5">Error loading data.</td></tr>`;
+      }
+    }
+
+    async function loadWasteLogs() {
+      try {
+        const res = await fetch("http://127.0.0.1:5000/api/waste-logs");
+        const data = await res.json();
+
+        if (!data.success) {
+          logsBody.innerHTML = `<tr><td colspan="5">Could not load logs.</td></tr>`;
+          return;
+        }
+
+        if (!data.logs || data.logs.length === 0) {
+          logsBody.innerHTML = `<tr><td colspan="5">No logs yet.</td></tr>`;
+          return;
+        }
+
+        logsBody.innerHTML = "";
+        data.logs.forEach(log => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${log.log_id}</td>
+            <td>${log.waste_type || '-'}</td>
+            <td>${log.resident_name || '-'}</td>
+            <td>${log.house_number || '-'}</td>
+            <td>${log.timestamp}</td>
+          `;
+          logsBody.appendChild(tr);
+        });
+
+      } catch (err) {
+        console.error(err);
+        logsBody.innerHTML = `<tr><td colspan="5">Error loading logs.</td></tr>`;
+      }
+    }
+    async function updateStatus(requestId, newStatus) {
+  try {
+    const res = await fetch("http://127.0.0.1:5000/api/update-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: requestId, status: newStatus })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      await loadAllRequests();
+      alert("Status updated!");
+    } else {
+      alert("Failed to update status.");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error updating status.");
+  }
+}
+
+
+    // initial load
+    loadAllRequests();
+    loadWasteLogs();
+    // auto refresh
+    setInterval(() => {
+      loadAllRequests();
+      loadWasteLogs();
+    }, 7000);
+  </script>
+</body>
+</html>
