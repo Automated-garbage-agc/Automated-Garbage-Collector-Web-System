@@ -5,8 +5,11 @@ from datetime import datetime
 
 DB_NAME = "agc_system.db"
 
+
+
 app = Flask(__name__)
 CORS(app)  # allow calls from HTML/JS frontend
+init_default_users()
 
 
 def get_db_connection():
@@ -213,5 +216,6 @@ def update_status():
 
 
 if __name__ == "__main__":
-    init_default_users()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
+
+
